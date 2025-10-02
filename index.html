@@ -1,0 +1,337 @@
+<!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Game-style 3D Character — Interactive Avatar</title>
+  <style>
+    :root{--accent:#5b6fc8;--bg:#0b0b10}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(#0b0b10,#141419);color:#fff}
+    .app{max-width:900px;margin:12px auto;border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.6);background:linear-gradient(180deg,rgba(12,12,18,0.95),rgba(18,18,24,0.98));position:relative}/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;padding:12px 18px}
+.profile{display:flex;align-items:center;gap:12px}
+.avatar-badge{width:64px;height:64px;border-radius:10px;background:#111;padding:6px;box-shadow:inset 0 2px 6px rgba(255,255,255,0.03)}
+.meta{line-height:1}
+.meta .name{font-weight:800}
+.resources{display:flex;gap:10px;align-items:center}
+.res{background:rgba(255,255,255,0.03);padding:8px 12px;border-radius:12px;font-weight:700}
+
+/* main area */
+.main{display:grid;grid-template-columns:60px 1fr 64px;align-items:stretch;gap:12px;padding:8px 18px 18px}
+
+/* left vertical menu */
+.left-menu{display:flex;flex-direction:column;gap:12px;align-items:center}
+.left-menu .btn{width:46px;height:46px;border-radius:10px;background:rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:center;cursor:pointer}
+
+/* right vertical menu */
+.right-menu{display:flex;flex-direction:column;gap:12px;align-items:center}
+.right-menu .card{width:56px;height:56px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));display:flex;align-items:center;justify-content:center;font-weight:800}
+
+/* center viewer */
+#viewer{position:relative;height:640px;border-radius:12px;background:linear-gradient(180deg,#0e0e12,#232329);display:flex;align-items:center;justify-content:center;overflow:hidden}
+canvas{width:100%;height:100%;display:block}
+
+/* UI overlays */
+.bottom-ui{position:absolute;left:18px;right:18px;bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.heart-bar{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:999px}
+.task-box{background:rgba(255,255,255,0.04);padding:10px 12px;border-radius:12px;font-weight:800;display:flex;gap:10px;align-items:center}
+
+.nav{display:flex;gap:8px}
+.nav .tab{background:rgba(255,255,255,0.03);padding:12px 18px;border-radius:12px;font-weight:800}
+
+/* chat bubble and emotion */
+.bubble{position:absolute;left:50%;transform:translateX(-50%);top:18px;background:rgba(0,0,0,0.6);padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);max-width:58%;pointer-events:none}
+.bubble .emo{font-weight:900;margin-right:8px}
+
+/* control panel (compact) */
+.controls{position:absolute;right:18px;bottom:18px;background:rgba(0,0,0,0.45);padding:10px;border-radius:10px;display:flex;gap:8px;align-items:center}
+.controls label{cursor:pointer;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);color:#fff}
+
+/* small overlay when angry/sad */
+.overlay-emo{position:absolute;inset:0;background:transparent;pointer-events:none}
+.overlay-emo.angry{box-shadow:inset 0 0 120px rgba(255,30,30,0.06)}
+.overlay-emo.sad{box-shadow:inset 0 0 120px rgba(30,80,255,0.04)}
+.overlay-emo.happy{box-shadow:inset 0 0 120px rgba(255,230,50,0.04)}
+
+@media (max-width:920px){ .app{margin:6px} #viewer{height:600px} }
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top">
+      <div class="profile">
+        <div class="avatar-badge"><img id="miniAvatar" src="" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:6px"/></div>
+        <div class="meta">
+          <div class="name">LAU REN <span style="opacity:0.6;font-weight:600">ID:256</span></div>
+          <div style="font-size:12px;color:#9aa3b2">Level 17</div>
+        </div>
+      </div>
+      <div class="resources">
+        <div class="res">623410</div>
+        <div class="res">233 </div>
+      </div>
+    </div><div class="main">
+  <div class="left-menu">
+    <div class="btn" title="Settings"></div>
+    <div class="btn" title="Inventory"></div>
+    <div class="btn" title="Friends"></div>
+    <div class="btn" title="Mail"></div>
+  </div>
+
+  <div id="viewer">
+    <div class="bubble" id="bubble" style="display:none"><span class="emo" id="bubbleEmo"></span><span id="bubbleText">Hi — tap my character to chat!</span></div>
+    <div class="overlay-emo" id="overlay"></div>
+    <!-- three.js canvas injected here -->
+  </div>
+
+  <div class="right-menu">
+    <div class="card"></div>
+    <div class="card"></div>
+    <div class="card"></div>
+  </div>
+</div>
+
+<div class="bottom-ui">
+  <div class="heart-bar">
+    <div></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div style="color:#ff6b6b;font-weight:900"></div>
+      <div style="opacity:0.5"></div>
+    </div>
+    <div style="background:linear-gradient(90deg,#ff4d4d,#ffd365);padding:6px 10px;border-radius:999px;margin-left:8px;font-weight:900">68/100</div>
+  </div>
+
+  <div class="task-box"> <div>TASK</div> <div style="background:#222;padding:6px 10px;border-radius:8px">2-5 MAIN</div></div>
+
+  <div class="nav">
+    <div class="tab">HOME</div>
+    <div class="tab">PORT</div>
+    <div class="tab">BATTLE</div>
+    <div class="tab">DEVELOP</div>
+    <div class="tab">CARDS</div>
+  </div>
+</div>
+
+<div class="controls">
+  <label style="cursor:pointer;"><input id="localFile" type="file" accept=".glb,.gltf,.vrm" style="display:none">Load File</label>
+</div>
+
+  </div>  <!-- three.js libs -->  <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>  <script src="https://unpkg.com/three@0.152.2/examples/js/controls/OrbitControls.js"></script>  <script src="https://unpkg.com/three@0.152.2/examples/js/loaders/GLTFLoader.js"></script>  <script>
+    // ---------------------- Core three.js setup ----------------------
+    const container = document.getElementById('viewer');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(38, container.clientWidth/container.clientHeight, 0.05, 1000);
+    camera.position.set(0,1.5,2.6);
+
+    const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(0,1.1,0);
+    controls.enablePan = true; controls.enableDamping = true; controls.dampingFactor = 0.08;
+
+    // lights
+    const hemi = new THREE.HemisphereLight(0xffffff,0x444444,0.6); scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff,0.9); dir.position.set(5,10,7); dir.castShadow=true; scene.add(dir);
+    scene.add(new THREE.AmbientLight(0xffffff,0.14));
+
+    // ground
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(10,10), new THREE.ShadowMaterial({opacity:0.2}));
+    ground.rotation.x = -Math.PI/2; ground.position.y = 0; ground.receiveShadow = true; scene.add(ground);
+    renderer.shadowMap.enabled = true;
+
+    // loaders
+    const loader = new THREE.GLTFLoader();
+
+    // model
+    let model = null; let mixer = null; let currentEmotion = 'neutral';
+    const mixers = [];
+
+    // raycaster for detecting clicks on model
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function setBubble(text, emo=''){
+      const b = document.getElementById('bubble');
+      document.getElementById('bubbleText').textContent = text;
+      document.getElementById('bubbleEmo').textContent = emo;
+      b.style.display = 'block';
+      b.style.opacity = 1;
+      clearTimeout(b._t);
+      b._t = setTimeout(()=>{ b.style.display='none'; }, 4500);
+    }
+
+    function setEmotion(e){
+      currentEmotion = e;
+      const ov = document.getElementById('overlay');
+      ov.className = 'overlay-emo ' + e;
+      const emap = {happy:'',sad:'',angry:'',fear:'',neutral:''};
+      setBubble({happy:'I feel great!',sad:'I feel blue...',angry:'Grr! Watch out!',fear:'I... I\'m scared...',neutral:'Hi!'}[e], emap[e]);
+    }
+
+    // try auto-load fallback (uploaded file next to HTML)
+    const fallbackURL = '1499486751228717674.vrm.glb'; // ensure this file is next to HTML when testing
+    function loadModelFromURL(url){
+      loader.load(url, gltf => {
+        if(model) scene.remove(model);
+        model = gltf.scene || gltf;
+        // normalize and center
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const maxDim = Math.max(size.x,size.y,size.z);
+        const scale = 1.2 / maxDim; model.scale.setScalar(scale);
+        box.setFromObject(model);
+        const center = new THREE.Vector3(); box.getCenter(center);
+        model.position.sub(center);
+        box.setFromObject(model);
+        const minY = box.min.y; model.position.y -= minY;
+
+        scene.add(model);
+
+        // animations
+        if(gltf.animations && gltf.animations.length){
+          mixer = new THREE.AnimationMixer(model);
+          mixers.push(mixer);
+          gltf.animations.forEach((clip,i) => {
+            const action = mixer.clipAction(clip);
+            action.play();
+            action.setEffectiveWeight(0.6);
+          });
+        }
+
+        document.getElementById('miniAvatar').src = '';
+        setBubble('Halo! Aku hidup di sini. Sentuh karakternya untuk bicara.');
+      }, xhr=>{}, err=>{ console.warn('Gagal load', err); setBubble('Model gagal dimuat dari URL — coba tombol Load File.',''); });
+    }
+    loadModelFromURL(fallbackURL);
+
+    // local file input support
+    document.getElementById('localFile').addEventListener('change', e=>{
+      const f = e.target.files[0]; if(!f) return;
+      const url = URL.createObjectURL(f);
+      loadModelFromURL(url);
+    });
+
+    // interactions via direct touch/click on model (raycast)
+    function getPointer(event){
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      pointer.set(x,y);
+    }
+
+    // tap/hold detection
+    let pointerDownTime = 0;
+    renderer.domElement.addEventListener('pointerdown', e=>{ pointerDownTime = Date.now(); });
+    renderer.domElement.addEventListener('pointerup', e=>{
+      const delta = Date.now() - pointerDownTime;
+      getPointer(e); raycaster.setFromCamera(pointer, camera);
+      if(!model) return;
+      const intersects = raycaster.intersectObject(model, true);
+      if(intersects.length){
+        // clicked on model
+        if(delta < 250) { userInitiatedChat(); reactToTouch('tap'); }
+        else if(delta < 800) { reactToTouch('hold'); }
+        else { reactToTouch('long'); }
+      }
+    });
+
+    // user chat via clicking model -> opens text prompt
+    function userInitiatedChat(){
+      const q = prompt('Katakan sesuatu pada avatar (mis: halo, apa kabar, peluk):');
+      if(!q) return;
+      const ans = simpleChat(q.toLowerCase());
+      setBubble(ans.text, ans.emo);
+      if(ans.set) setEmotion(ans.set);
+    }
+
+    function simpleChat(text){
+      if(/halo|hi|hello|hai/.test(text)) return {text:'Halo! Senang bertemu denganmu ',emo:'',set:'happy'};
+      if(/apa kabar/.test(text)) return {text:'Baik! Sedang santai dan siap bertualang.',emo:'',set:'neutral'};
+      if(/peluk|hug/.test(text)) return {text:'Tentu~ peluk hangat! ',emo:'',set:'happy'};
+      if(/marah|bodoh|jelek|goblok/.test(text)) return {text:'...Aku sedih kalau kau berkata seperti itu.',emo:'',set:'sad'};
+      if(/kenal nama|siapa namamu/.test(text)) return {text:'Aku Lau Ren. Senang bertemu!',emo:'',set:'neutral'};
+      if(/takut|scared/.test(text)) return {text:'Aku takut... jangan tinggal aku sendirian.',emo:'',set:'fear'};
+      const pool = [
+        {t:'Aku sedang memeriksa peralatan. Mau ikut?',e:'',s:'neutral'},
+        {t:'Ngomong-ngomong, aku suka tempat yang hangat.',e:'',s:'happy'},
+        {t:'Hmm... itu menarik.',e:'',s:'neutral'},
+        {t:'Jangan main-main ya, aku bisa marah loh.',e:'',s:'angry'}
+      ];
+      return pool[Math.floor(Math.random()*pool.length)];
+    }
+
+    // reactions to touch (tap/hold/long) but no buttons
+    function reactToTouch(type){
+      if(type==='tap'){
+        // happier response
+        setEmotion(randomWeighted(['happy','neutral','happy'], [0.5,0.3,0.2]));
+        if(model) {
+          model.position.x += (Math.random()*0.03+0.01);
+          setTimeout(()=>{ if(model) model.position.x -= 0.02; },160);
+        }
+      } else if(type==='hold'){
+        setEmotion(randomWeighted(['sad','neutral'], [0.7,0.3]));
+        if(model) { model.rotation.y += 0.12; setTimeout(()=>{ if(model) model.rotation.y -= 0.12; },260); }
+      } else {
+        setEmotion(randomWeighted(['angry','fear','angry'], [0.6,0.3,0.1]));
+        if(model) { model.rotation.x += 0.25; setTimeout(()=>{ if(model) model.rotation.x -= 0.25; },360); }
+      }
+    }
+
+    // automatic mood changes (no mood button) — weighted random every 20-40s
+    function randomWeighted(choices, weights){
+      const sum = weights.reduce((a,b)=>a+b,0);
+      let r = Math.random()*sum; for(let i=0;i<choices.length;i++){ r -= weights[i]; if(r<=0) return choices[i]; }
+      return choices[0];
+    }
+
+    function autoMoodLoop(){
+      // choose emotion with weights biased toward neutral/happy
+      const emotions = ['neutral','happy','sad','angry','fear'];
+      const weights = [50,25,10,8,7];
+      const next = randomWeighted(emotions, weights);
+      setEmotion(next);
+      // next interval 20-40s
+      setTimeout(autoMoodLoop, 20000 + Math.random()*20000);
+    }
+    // start loop after small delay
+    setTimeout(autoMoodLoop, 6000);
+
+    // idle chatter: sometimes speak to itself (monologue)
+    function idleChatter(){
+      const pool = [
+        'Ah, udara di sini enak sekali.',
+        'Sepertinya aku harus memeriksa perlengkapan.',
+        'Tidak apa-apa, aku baik-baik saja.',
+        'Hmm... ada sesuatu yang menarik di sebelah sana.'
+      ];
+      if(Math.random() < 0.6) setBubble(pool[Math.floor(Math.random()*pool.length)]);
+      setTimeout(idleChatter, 10000 + Math.random()*16000);
+    }
+    setTimeout(idleChatter, 8000);
+
+    // animation loop
+    const clock = new THREE.Clock();
+    function animate(){
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      mixers.forEach(m=> m.update(dt));
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // responsive
+    window.addEventListener('resize', ()=>{ camera.aspect = container.clientWidth / container.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(container.clientWidth, container.clientHeight); });
+
+    // small UX: pointer move show hint once
+    let hinted=false; renderer.domElement.addEventListener('pointermove', ()=>{ if(!hinted){ hinted=true; setBubble('Ingat: sentuh langsung karakternya untuk mengobrol.'); setTimeout(()=> hinted=false, 12000); } });
+
+  </script></body>
+</html>
